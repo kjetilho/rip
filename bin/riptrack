@@ -1,0 +1,25 @@
+#! /bin/sh
+
+# Configure in Grip as: riptrack %w
+# The filename MUST be on the format /directory/%i_%t.wav
+
+exec >>/tmp/debug.log 2>&1
+
+case $# in
+     1)	wavefile="$1"  ;;
+     *) echo Usage: $0 wavefile >&2; exit 64 ;;
+esac
+
+set - `basename $wavefile | tr "_." " "`
+cddbid="$1"; tracknum="$2"
+
+if [ -s /mm/samling/meta/*/$cddbid/$tracknum.flac ]
+then
+	echo "Please retag existing FLAC" > $wavefile
+	echo -n "$cddbid-$tracknum:already ripped -- "
+	ls -s /mm/samling/meta/*/$cddbid/$tracknum.flac
+	exit 0
+fi
+echo ${cddbid}_${tracknum}: starting rip
+exec cdparanoia -q -Z -d /dev/scd0 $tracknum $wavefile
+

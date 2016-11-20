@@ -1,0 +1,27 @@
+#! /bin/sh
+
+exec >> /tmp/debug.log 2>&1
+
+JOB="$7-$2"
+
+echo $JOB: === start === $(date)
+
+for a
+do
+	echo "$JOB: ... [$a] ..."
+done
+
+($0.pl "$@" || echo $? > /tmp/failed.$JOB) 2>&1 |
+    grep --line-buffered -v '' | sed -u "s/^/$JOB:/"
+if [ -r /tmp/failed.$JOB ]
+then
+        error=$(cat /tmp/failed.$JOB)
+	echo $JOB: ==== failed $error ==== $(date)
+	(echo =============================
+	date
+	echo "$5: $6 #$2"
+	echo "returned $error") >> /mm/samling/failed.log
+	rm /tmp/failed.$JOB
+else
+	echo $JOB: ==== success ==== $(date)
+fi
