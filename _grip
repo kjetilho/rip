@@ -1,12 +1,12 @@
 GRIP 2
-grip_version 3.3.1
-cd_device /dev/scd0
+grip_version @@GRIP_VERSION@@
+cd_device /dev/cdrom
 force_scsi 
-ripexename /home/kjetilho/bin/riptrack
-ripcmdline %w
+ripexename @@RIPTRACK@@
+ripcmdline %w %c
 wav_filter_cmd 
 disc_filter_cmd 
-mp3exename /home/kjetilho/bin/encode
+mp3exename @@ENCODE@@
 mp3cmdline %w %t %n %a %A %d %i %y %G
 dbserver freedb.freedb.org
 ripfileformat /cmm/tmp/%i_%t.wav

@@ -5,9 +5,12 @@
 
 exec >>/tmp/debug.log 2>&1
 
+cdrom=/dev/cdrom
+
 case $# in
      1)	wavefile="$1"  ;;
-     *) echo Usage: $0 wavefile >&2; exit 64 ;;
+     2) wavefile="$1"; cdrom="$2" ;;
+     *) echo Usage: $0 wavefile [device] >&2; exit 64 ;;
 esac
 
 set - `basename $wavefile | tr "_." " "`
@@ -21,5 +24,5 @@ then
 	exit 0
 fi
 echo ${cddbid}_${tracknum}: starting rip
-exec cdparanoia -q -Z -d /dev/scd0 $tracknum $wavefile
+exec cdparanoia -q -Z -d $cdrom $tracknum $wavefile
 
