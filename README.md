@@ -6,4 +6,5 @@ Requirements:
 * cdparanoia
 * grip
 * cd-discid
-
+* sane-backends (scanimage)
+* netpbm-progs (pnmtopng)

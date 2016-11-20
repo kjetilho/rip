@@ -4,7 +4,8 @@ BINDIR = $(HOME)/bin
 RIPTRACK = $(BINDIR)/riptrack
 ENCODE = $(BINDIR)/encode
 ENCODE_PL = $(BINDIR)/encode.pl
-SCRIPTS = $(RIPTRACK) $(ENCODE) $(ENCODE_PL)
+SCAN = $(BINDIR)/scan
+SCRIPTS = $(RIPTRACK) $(ENCODE) $(ENCODE_PL) $(SCAN)
 
 all:
 	# nothing
@@ -22,5 +23,7 @@ $(RIPTRACK): bin/riptrack
 $(ENCODE): bin/encode
 	install -m 0775 $< $@
 $(ENCODE_PL): bin/encode.pl
+	install -m 0775 $< $@
+$(SCAN): bin/scan
 	install -m 0775 $< $@
 

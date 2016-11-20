@@ -1,6 +1,6 @@
 #! /bin/sh
 
-dev=epson:libusb:002:008
+dev=epson2:libusb:002:008
 dpi=600
 
 discid="$1"
