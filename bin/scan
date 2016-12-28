@@ -1,12 +1,16 @@
 #! /bin/sh
 
-dev=epson2:libusb:002:008
-dpi=600
+dev=epson2:libusb:002:005
+dpi=1200
+closeness=50
 
-discid="$1"
+if ! scanimage -n -d $dev
+then
+    dev=$(scanimage -f "%d%n" | grep -v ^v4l: -m 1)
+fi
+echo "Using scanner $dev"
 
-while true
-do
+get_discid() {
     while [ "$discid" = "" ]
     do
         discid=`cd-discid /dev/cdrom | cut -d" " -f1`
@@ -16,8 +20,19 @@ do
             sleep 5
         fi
     done
+}
 
-    dir=/mm/tmp/cover/$discid
+view() {
+    feh -ZFd "$@"
+}
+
+discid="$1"
+
+while true
+do
+    get_discid
+
+    dir=/cmm/tmp/cover/$discid
     mkdir -p $dir
     cd $dir
 
@@ -26,11 +41,13 @@ do
     then
         album=`grep "^DTITLE=" $HOME/.cddb/$discid | cut -d= -f2-`
         genre=`grep "^DGENRE=" $HOME/.cddb/$discid | cut -d= -f2-`
-        if [ -r /mm/samling/meta/$genre/$discid/cover.png ]
+        if [ -r /mm/samling/meta/$genre/$discid/cover.png -o \
+             -r /mm/samling/meta/$genre/$discid/cover.jpg ]
         then
             echo
             echo "=== NOTE: Already scanned cover ==================="
-            ls -s1 /mm/samling/meta/$genre/$discid/*.png
+            ls -s1 /mm/samling/meta/$genre/$discid/*.png 2>/dev/null
+            ls -s1 /mm/samling/meta/$genre/$discid/*.jpg 2>/dev/null
             echo "==================================================="
             echo
         fi
@@ -50,11 +67,11 @@ do
         echo "  2. Full CD (14.0 x 12.5)"
         echo "  3. CD paper sleeve (12.5 x 12.5)"
         echo "  or custom (enter dimensions in mm)"
-        if [ -r cover.png ]
+        if [ -r cover.jpg ]
         then
             echo "  v. View it"
             echo ""
-            file cover.png
+            file cover.jpg
         fi
         echo ""
         echo -n "Your choice: [1] ";
@@ -66,15 +83,16 @@ do
             2)    x=140; y=125; break ;;
             3)    x=125; y=125; break ;;
             [1-9][0-9]*) break ;;
-            [vV]) feh cover.png ;;
+            [vV]) view cover.jpg ;;
             *)    echo Unknown choice ;;
         esac
     done
 
     [ -n "$x" ] &&
         scanimage --mode color --resolution $dpi -x $x -y $y -d $dev -p |
-            pnmtopng -compression 9 > cover.png.tmp &&
-        mv cover.png.tmp cover.png
+            pnmcrop -white -closeness $closeness |
+            cjpeg -optimize -outfile cover.jpg.tmp &&
+        mv cover.jpg.tmp cover.jpg
 
     while true
     do
@@ -85,7 +103,7 @@ do
         echo "  2. Full CD (14.0 x 12.5)"
         echo "  or custom (enter dimensions in mm)"
         echo "  or complete booklet (enter 'page 1' etc.)"
-        files=$(ls inside.png booklet_??.png 2>/dev/null)
+        files=$(ls inside.jpg booklet_??.jpg 2>/dev/null)
         if [ "$files" ]
         then
             echo "  v. View it"
@@ -112,13 +130,14 @@ do
             page)
                 page=$y; x=120; y=120
                 scanimage --mode color --resolution $dpi -x $x -y $y -d $dev -p |
-                    pnmtopng -compression 9 > inside.png.tmp &&
-                    mv inside.png.tmp booklet_$(printf %02d $page).png
+                    pnmcrop -white -closeness $closeness |
+                    cjpeg -optimize -outfile inside.jpg.tmp &&
+                    mv inside.jpg.tmp booklet_$(printf %02d $page).jpg
                 ;;
             [vV])
                 case $y in
-                    [0-9]*) feh booklet_$(printf %02d $y).png ;;
-                    *)      feh $files ;;
+                    [0-9]*) view booklet_$(printf %02d $y).jpg ;;
+                    *)      view $files ;;
                 esac
                 ;;
             *)
@@ -129,8 +148,9 @@ do
 
     [ -n "$x" ] &&
         scanimage --mode color --resolution $dpi -x $x -y $y -d $dev -p |
-            pnmtopng -compression 9 > inside.png.tmp &&
-        mv inside.png.tmp inside.png
+            pnmcrop -white -closeness $closeness |
+            cjpeg -optimize -outfile inside.jpg.tmp &&
+        mv inside.jpg.tmp inside.jpg
 
     while true
     do
@@ -143,11 +163,11 @@ do
         echo "  4. Full CD, reduced resolution"
         echo "  5. Naked inlay (15.0 x 11.5)"
         echo "  or custom (enter dimensions in mm)"
-        if [ -r back.png ]
+        if [ -r back.jpg ]
         then
             echo "  v. View it"
             echo ""
-            file back.png
+            file back.jpg
         fi
         echo ""
         echo -n "Your choice: [4] ";
@@ -162,24 +182,26 @@ do
             ""|4) x=140; y=125; dpi=300; scale=0.5; break ;;
             5)    x=150; y=115; break ;;
             [1-9][0-9]*) break ;;
-            [vV]) feh back.png ;;
+            [vV]) view back.jpg ;;
             *)    echo Unknown choice ;;
         esac
     done
 
     [ -n "$x" ] &&
         scanimage --mode color --resolution $dpi -x $x -y $y -d $dev -p |
-            pnmscale $scale | pnmtopng -compression 9 > back.png.tmp &&
-        mv back.png.tmp back.png
+            pnmscale $scale |
+            pnmcrop -white -closeness $closeness |
+            cjpeg -optimize -outfile back.jpg.tmp &&
+        mv back.jpg.tmp back.jpg
 
     echo ""
-    ls -1s $dir/*.png
+    ls -1s $dir/*.jpg
     echo ""
 
     echo -n "View results? [yes] "
     read ans
     case $ans in
-        ""|[jJyY]) feh -ZF *.png ;;
+        ""|[jJyY]) view *.jpg ;;
     esac
 
     if [ -r $HOME/.cddb/$discid ]
@@ -189,7 +211,7 @@ do
         case $ans in
             ""|[jJyY])
                 mkdir -p /mm/samling/meta/$genre/$discid
-                for m in *.png; do
+                for m in *.jpg; do
                     mv $m /mm/samling/meta/$genre/$discid/
                 done
                 cd ..
