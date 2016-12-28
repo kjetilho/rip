@@ -5,23 +5,25 @@ dpi=600
 
 discid="$1"
 
-while [ "$discid" = "" ]
+while true
 do
-    discid=`cd-discid /dev/cdrom | cut -d" " -f1`
-    if [ "$discid" = "" ]
+    while [ "$discid" = "" ]
+    do
+        discid=`cd-discid /dev/cdrom | cut -d" " -f1`
+        if [ "$discid" = "" ]
+        then
+	    echo "Looking up CDDB ID failed, retrying in 5 seconds..."
+	    sleep 5
+        fi
+    done
+
+    dir=/mm/tmp/cover/$discid
+    mkdir -p $dir
+    cd $dir
+
+    HOME=/home/kjetilho
+    if [ -r $HOME/.cddb/$discid ]
     then
-	echo "Looking up CDDB ID failed, retrying in 5 seconds..."
-	sleep 5
-    fi
-done
-
-dir=/mm/tmp/cover/$discid
-mkdir -p $dir
-cd $dir
-
-HOME=/home/kjetilho
-if [ -r $HOME/.cddb/$discid ]
-then
 	album=`grep "^DTITLE=" $HOME/.cddb/$discid | cut -d= -f2-`
 	genre=`grep "^DGENRE=" $HOME/.cddb/$discid | cut -d= -f2-`
 	if [ -r /mm/samling/meta/$genre/$discid/cover.png ]
@@ -32,167 +34,170 @@ then
 	    echo "==================================================="
 	    echo
 	fi
-else
+    else
 	album="Unknown album"
-fi
-echo "Currently processing: $album ($genre $discid)"
-
-while true
-do
-
-    echo ""
-    echo "Scanning front cover  -- please choose:"
-    echo ""
-    echo "  0. Skip"
-    echo "  1. CD booklet (12.0 x 12.0)"
-    echo "  2. Full CD (14.0 x 12.5)"
-    echo "  3. CD paper sleeve (12.5 x 12.5)"
-    echo "  or custom (enter dimensions in mm)"
-    if [ -r cover.png ]
-    then
-	echo "  v. View it"
-	echo ""
-	file cover.png
     fi
+    echo "Currently processing: $album ($genre $discid)"
+
+    while true
+    do
+
+        echo ""
+        echo "Scanning front cover  -- please choose:"
+        echo ""
+        echo "  0. Skip"
+        echo "  1. CD booklet (12.0 x 12.0)"
+        echo "  2. Full CD (14.0 x 12.5)"
+        echo "  3. CD paper sleeve (12.5 x 12.5)"
+        echo "  or custom (enter dimensions in mm)"
+        if [ -r cover.png ]
+        then
+	    echo "  v. View it"
+	    echo ""
+	    file cover.png
+        fi
+        echo ""
+        echo -n "Your choice: [1] ";
+
+        read x y
+        case $x in
+	    0)    x=""; break ;;
+	    ""|1) x=120; y=120; break ;;
+	    2)    x=140; y=125; break ;;
+	    3)    x=125; y=125; break ;;
+	    [1-9][0-9]*) break ;;
+	    [vV]) feh cover.png ;;
+	    *)    echo Unknown choice ;;
+        esac
+    done
+
+    [ -n "$x" ] &&
+        scanimage --mode color --resolution $dpi -x $x -y $y -d $dev -p |
+	    pnmtopng -compression 9 > cover.png.tmp &&
+        mv cover.png.tmp cover.png
+
+    while true
+    do
+        echo ""
+        echo "Scanning inside booklet -- please choose:"
+        echo "  0. Skip"
+        echo "  1. CD booklet (12.0 x 12.0)"
+        echo "  2. Full CD (14.0 x 12.5)"
+        echo "  or custom (enter dimensions in mm)"
+        echo "  or complete booklet (enter 'page 1' etc.)"
+        files=$(ls inside.png booklet_??.png 2>/dev/null)
+        if [ "$files" ]
+        then
+	    echo "  v. View it"
+	    echo ""
+	    file $files
+        fi
+        echo ""
+        echo -n "Your choice: [0] ";
+
+        read x y
+        case $x in
+	    ""|0)
+	        x=""; break
+	        ;;
+	    1)
+	        x=120; y=120; break
+	        ;;
+	    2)
+	        x=140; y=125; break
+	        ;;
+	    [1-9][0-9]*)
+	        break
+	        ;;
+	    page)
+	        page=$y; x=120; y=120
+                scanimage --mode color --resolution $dpi -x $x -y $y -d $dev -p |
+	            pnmtopng -compression 9 > inside.png.tmp &&
+		    mv inside.png.tmp booklet_$(printf %02d $page).png
+	        ;;
+	    [vV])
+	        case $y in
+	            [0-9]*) feh booklet_$(printf %02d $y).png ;;
+	            *)      feh $files ;;
+	        esac
+                ;;
+	    *)
+	        echo Unknown choice
+	        ;;
+        esac
+    done
+
+    [ -n "$x" ] &&
+        scanimage --mode color --resolution $dpi -x $x -y $y -d $dev -p |
+	    pnmtopng -compression 9 > inside.png.tmp &&
+        mv inside.png.tmp inside.png
+
+    while true
+    do
+        echo ""
+        echo "Scanning back cover -- please choose:"
+        echo "  0. Skip"
+        echo "  1. CD booklet (12.0 x 12.0)"
+        echo "  2. Full CD (14.0 x 12.5)"
+        echo "  3. CD paper sleeve (12.5 x 12.5)"
+        echo "  4. Full CD, reduced resolution"
+        echo "  5. Naked inlay (15.0 x 11.5)"
+        echo "  or custom (enter dimensions in mm)"
+        if [ -r back.png ]
+        then
+	    echo "  v. View it"
+	    echo ""
+	    file back.png
+        fi
+        echo ""
+        echo -n "Your choice: [4] ";
+
+        scale=1.0
+        read x y
+        case $x in
+	    0)    x=""; break ;;
+	    1)    x=120; y=120; break ;;
+	    2)    x=140; y=125; break ;;
+	    3)    x=125; y=125; break ;;
+	    ""|4) x=140; y=125; dpi=300; scale=0.5; break ;;
+	    5)    x=150; y=115; break ;;
+	    [1-9][0-9]*) break ;;
+	    [vV]) feh back.png ;;
+	    *)    echo Unknown choice ;;
+        esac
+    done
+
+    [ -n "$x" ] &&
+        scanimage --mode color --resolution $dpi -x $x -y $y -d $dev -p |
+	    pnmscale $scale | pnmtopng -compression 9 > back.png.tmp &&
+        mv back.png.tmp back.png
+
     echo ""
-    echo -n "Your choice: [1] ";
-
-    read x y
-    case $x in
-	0)    x=""; break ;;
-	""|1) x=120; y=120; break ;;
-	2)    x=140; y=125; break ;;
-	3)    x=125; y=125; break ;;
-	[1-9][0-9]*) break ;;
-	[vV]) feh cover.png ;;
-	*)    echo Unknown choice ;;
-    esac
-done
-
-[ -n "$x" ] &&
-scanimage --mode color --resolution $dpi -x $x -y $y -d $dev -p |
-	  pnmtopng -compression 9 > cover.png.tmp &&
-mv cover.png.tmp cover.png
-
-while true
-do
+    ls -1s $dir/*.png
     echo ""
-    echo "Scanning inside booklet -- please choose:"
-    echo "  0. Skip"
-    echo "  1. CD booklet (12.0 x 12.0)"
-    echo "  2. Full CD (14.0 x 12.5)"
-    echo "  or custom (enter dimensions in mm)"
-    echo "  or complete booklet (enter 'page 1' etc.)"
-    files=$(ls inside.png booklet_??.png 2>/dev/null)
-    if [ "$files" ]
-    then
-	echo "  v. View it"
-	echo ""
-	file $files
-    fi
-    echo ""
-    echo -n "Your choice: [0] ";
 
-    read x y
-    case $x in
-	""|0)
-	    x=""; break
-	    ;;
-	1)
-	    x=120; y=120; break
-	    ;;
-	2)
-	    x=140; y=125; break
-	    ;;
-	[1-9][0-9]*)
-	    break
-	    ;;
-	page)
-	    page=$y; x=120; y=120
-            scanimage --mode color --resolution $dpi -x $x -y $y -d $dev -p |
-	        pnmtopng -compression 9 > inside.png.tmp &&
-		mv inside.png.tmp booklet_$(printf %02d $page).png
-	    ;;
-	[vV])
-	    case $y in
-	        [0-9]*) feh booklet_$(printf %02d $y).png ;;
-	        *)      feh $files ;;
-	    esac
-            ;;
-	*)
-	    echo Unknown choice
-	    ;;
-    esac
-done
-
-[ -n "$x" ] &&
-scanimage --mode color --resolution $dpi -x $x -y $y -d $dev -p |
-	  pnmtopng -compression 9 > inside.png.tmp &&
-mv inside.png.tmp inside.png
-
-while true
-do
-    echo ""
-    echo "Scanning back cover -- please choose:"
-    echo "  0. Skip"
-    echo "  1. CD booklet (12.0 x 12.0)"
-    echo "  2. Full CD (14.0 x 12.5)"
-    echo "  3. CD paper sleeve (12.5 x 12.5)"
-    echo "  4. Full CD, reduced resolution"
-    echo "  5. Naked inlay (15.0 x 11.5)"
-    echo "  or custom (enter dimensions in mm)"
-    if [ -r back.png ]
-    then
-	echo "  v. View it"
-	echo ""
-	file back.png
-    fi
-    echo ""
-    echo -n "Your choice: [4] ";
-
-    scale=1.0
-    read x y
-    case $x in
-	0)    x=""; break ;;
-	1)    x=120; y=120; break ;;
-	2)    x=140; y=125; break ;;
-	3)    x=125; y=125; break ;;
-	""|4) x=140; y=125; dpi=300; scale=0.5; break ;;
-	5)    x=150; y=115; break ;;
-	[1-9][0-9]*) break ;;
-	[vV]) feh back.png ;;
-	*)    echo Unknown choice ;;
-    esac
-done
-
-[ -n "$x" ] &&
-scanimage --mode color --resolution $dpi -x $x -y $y -d $dev -p |
-	  pnmscale $scale | pnmtopng -compression 9 > back.png.tmp &&
-mv back.png.tmp back.png
-
-echo ""
-ls -1s $dir/*.png
-echo ""
-
-echo -n "View results? [yes] "
-read ans
-case $ans in
-    ""|[jJyY]) feh -ZF *.png ;;
-esac
-
-if [ -r $HOME/.cddb/$discid ]
-then
-    echo -n "Install files? [yes] "
+    echo -n "View results? [yes] "
     read ans
     case $ans in
-	""|[jJyY])
-	    mkdir -p /mm/samling/meta/$genre/$discid
-	    for m in *.png; do
-		mv $m /mm/samling/meta/$genre/$discid/
-	    done
-	    cd ..
-	    rmdir $dir
-	    ;;
+        ""|[jJyY]) feh -ZF *.png ;;
     esac
-fi
 
+    if [ -r $HOME/.cddb/$discid ]
+    then
+        echo -n "Install files? [yes] "
+        read ans
+        case $ans in
+	    ""|[jJyY])
+	        mkdir -p /mm/samling/meta/$genre/$discid
+	        for m in *.png; do
+		    mv $m /mm/samling/meta/$genre/$discid/
+	        done
+	        cd ..
+	        rmdir $dir
+	        ;;
+        esac
+    fi
+
+    echo "Press Return when ready for next task (or enter discid)"
+    read discid || break
+done
