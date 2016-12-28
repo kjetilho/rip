@@ -1,12 +1,17 @@
 #include <stdio.h>
+#include <stdlib.h>
+#include <unistd.h>
+#include <string.h>
 #include <math.h>
+#include <sys/types.h>
+#include <sys/stat.h>
+#include <fcntl.h>
 
 static char nuls[4096];
 
 #define BLOCKS_PER_SECOND ((long) 2*2*44100/sizeof(nuls))
 static const int threshold = 1 * BLOCKS_PER_SECOND + 2;
 static int bytecount = 0;
-static int in;
 static int out;
 static int verbose;
 
@@ -18,7 +23,7 @@ emit_nuls (int zeroes)
 	if (zeroes > threshold) {
 		int newsize = sqrt (zeroes / BLOCKS_PER_SECOND)
 			      * BLOCKS_PER_SECOND;
-		fprintf (stdout, "%d:%d@%d\n",
+		fprintf (stdout, "%d:%d@%lud\n",
 			 zeroes, newsize, bytecount / sizeof (nuls));
 		if (verbose)
 			fprintf (stderr,
@@ -67,7 +72,7 @@ main (int argc, char **argv)
 		exit (1);
 	}
 
-	out = open (argv[2], O_CREAT | O_WRONLY);
+	out = open (argv[2], O_CREAT | O_WRONLY, 0666);
 	if (out == -1) {
 		perror(argv[2]);
 		exit (1);
