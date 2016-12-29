@@ -4,7 +4,7 @@ dev=epson2:libusb:002:005
 dpi=1200
 cover_dpi=150
 cover_downscale=$(awk "BEGIN{print $cover_dpi/$dpi}" /dev/null)
-closeness=40
+closeness=50
 cdrom=${CDROM-/dev/cdrom}
 
 case $0 in
