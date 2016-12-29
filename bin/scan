@@ -2,7 +2,15 @@
 
 dev=epson2:libusb:002:005
 dpi=1200
-closeness=50
+cover_dpi=150
+cover_downscale=$(awk "BEGIN{print $cover_dpi/$dpi}" /dev/null)
+closeness=40
+cdrom=${CDROM-/dev/cdrom}
+
+case $0 in
+    /*) progname="$0" ;;
+    *)  progname="$(pwd)/$0" ;;
+esac
 
 if ! scanimage -n -d $dev
 then
@@ -13,7 +21,7 @@ echo "Using scanner $dev"
 get_discid() {
     while [ "$discid" = "" ]
     do
-        discid=`cd-discid /dev/cdrom | cut -d" " -f1`
+        discid=`cd-discid $cdrom | cut -d" " -f1`
         if [ "$discid" = "" ]
         then
             echo "Looking up CDDB ID failed, retrying in 5 seconds..."
@@ -41,20 +49,50 @@ do
     then
         album=`grep "^DTITLE=" $HOME/.cddb/$discid | cut -d= -f2-`
         genre=`grep "^DGENRE=" $HOME/.cddb/$discid | cut -d= -f2-`
-        if [ -r /mm/samling/meta/$genre/$discid/cover.png -o \
-             -r /mm/samling/meta/$genre/$discid/cover.jpg ]
-        then
-            echo
-            echo "=== NOTE: Already scanned cover ==================="
-            ls -s1 /mm/samling/meta/$genre/$discid/*.png 2>/dev/null
-            ls -s1 /mm/samling/meta/$genre/$discid/*.jpg 2>/dev/null
-            echo "==================================================="
-            echo
-        fi
     else
         album="Unknown album"
     fi
     echo "Currently processing: $album ($genre $discid)"
+
+    genres=$(ls /mm/samling/meta/*/$discid/01.flac 2>/dev/null | cut -d/ -f5)
+    if [ "$genres" ]
+    then
+        echo "=== NOTE: This discid exists as $genres ==="
+        (cd /mm/samling/meta; grep ^DTITLE */$discid/info.cddb)
+        echo -n "Enter genre (or 'k' for 'keep') [$genres] "
+        read ans
+        case $ans in
+            "") genre="$genres" ;;
+            k|keep) : ;;
+            *)  genre="$ans" ;;
+        esac
+        echo ""
+    fi
+    last=$(tail -1 /cmm/tmp/seen-discids | cut -f1)
+    if [ "$last" != "$genre/$discid" ]
+    then
+        printf "$genre/$discid\t$album\n" >> /cmm/tmp/seen-discids
+    fi
+
+    if [ -f /mm/samling/meta/$genre/$discid/01.flac ]
+    then
+        echo "Already processed files:"
+        (cd /mm/samling/meta/$genre/$discid; ls -s *.flac)
+    fi
+
+    if [ -r /mm/samling/meta/$genre/$discid/cover.png -o \
+            -r /mm/samling/meta/$genre/$discid/cover.jpg ]
+    then
+        echo
+        echo "=== NOTE: Already scanned cover ==================="
+        ls -s1 /mm/samling/meta/$genre/$discid/*.png 2>/dev/null
+        ls -s1 /mm/samling/meta/$genre/$discid/*.jpg 2>/dev/null
+        echo "==================================================="
+        echo
+        existing_scans=true
+    else
+        existing_scans=false
+    fi
 
     while true
     do
@@ -62,6 +100,9 @@ do
         echo ""
         echo "Scanning front cover  -- please choose:"
         echo ""
+        echo "  e. Eject and start over"
+        echo "  r. Reread CDDB"
+        echo "  l. Link to other CD in set"
         echo "  0. Skip"
         echo "  1. CD booklet (12.0 x 12.0)"
         echo "  2. Full CD (14.0 x 12.5)"
@@ -71,28 +112,85 @@ do
         then
             echo "  v. View it"
             echo ""
-            file cover.jpg
+            file cover*.jpg
+        fi
+        if $existing_scans
+        then
+            echo "  i. View installed scans"
         fi
         echo ""
         echo -n "Your choice: [1] ";
 
         read x y
         case $x in
-            0)    x=""; break ;;
-            ""|1) x=120; y=120; break ;;
-            2)    x=140; y=125; break ;;
-            3)    x=125; y=125; break ;;
-            [1-9][0-9]*) break ;;
-            [vV]) view cover.jpg ;;
-            *)    echo Unknown choice ;;
+            0)
+                x=""; break
+                ;;
+            ""|1)
+                x=120; y=120; break
+                ;;
+            2)
+                x=140; y=125; break
+                ;;
+            3)
+                x=125; y=125; break
+                ;;
+            [1-9][0-9]*)
+                break
+                ;;
+            [vV])
+                view cover*.jpg
+                ;;
+            [iI])
+                view /mm/samling/meta/$genre/$discid/*.png \
+                     /mm/samling/meta/$genre/$discid/*.jpg 2>/dev/null
+                ;;
+            [lL])
+                last=$(tail -2 /cmm/tmp/seen-discids | head -1 | cut -f1)
+                tail -5 /cmm/tmp/seen-discids
+                echo -n "Link to what CD? [$last] "
+                read other
+                case $other in
+                    "")  other=$last ;;
+                    */*) : ;;
+                    *)   continue ;;
+                esac
+                for img in /mm/samling/meta/$other/*.jpg
+                do
+                    ln $img /mm/samling/meta/$genre/$cddbid/
+                done
+                ;;
+            [rR])
+                exec "$progname" "$@"
+                ;;
+            [eE])
+                eject $cdrom
+                echo -n "Press Return when ready. "
+                read foo
+                exec "$progname" "$@"
+                ;;
+            *)
+                echo Unknown choice
+                ;;
         esac
     done
 
-    [ -n "$x" ] &&
+    if [ -n "$x" ]
+    then
         scanimage --mode color --resolution $dpi -x $x -y $y -d $dev -p |
             pnmcrop -white -closeness $closeness |
             cjpeg -optimize -outfile cover.jpg.tmp &&
-        mv cover.jpg.tmp cover.jpg
+            mv cover.jpg.tmp cover-${dpi}dpi.jpg
+        if [ $cover_dpi = $dpi ]
+        then
+            ln cover-${dpi}dpi.jpg cover.jpg
+        else
+            djpeg cover-${dpi}dpi.jpg |
+                pamscale $cover_downscale |
+                cjpeg -optimize -outfile cover.jpg.tmp &&
+                mv cover.jpg.tmp cover.jpg
+        fi
+    fi
 
     while true
     do
@@ -173,13 +271,14 @@ do
         echo -n "Your choice: [4] ";
 
         scale=1.0
+        back_dpi=$dpi
         read x y
         case $x in
             0)    x=""; break ;;
             1)    x=120; y=120; break ;;
             2)    x=140; y=125; break ;;
             3)    x=125; y=125; break ;;
-            ""|4) x=140; y=125; dpi=300; scale=0.5; break ;;
+            ""|4) x=140; y=125; back_dpi=300; scale=0.5; break ;;
             5)    x=150; y=115; break ;;
             [1-9][0-9]*) break ;;
             [vV]) view back.jpg ;;
@@ -188,8 +287,8 @@ do
     done
 
     [ -n "$x" ] &&
-        scanimage --mode color --resolution $dpi -x $x -y $y -d $dev -p |
-            pnmscale $scale |
+        scanimage --mode color --resolution $back_dpi -x $x -y $y -d $dev -p |
+            pamscale $scale |
             pnmcrop -white -closeness $closeness |
             cjpeg -optimize -outfile back.jpg.tmp &&
         mv back.jpg.tmp back.jpg
@@ -215,11 +314,19 @@ do
                     mv $m /mm/samling/meta/$genre/$discid/
                 done
                 cd ..
+                rm -f $dir/feh_*_filelist
                 rmdir $dir
                 ;;
         esac
     fi
 
-    echo "Press Return when ready for next task (or enter discid)"
-    read discid || break
+    echo -n "Enter 'eject' or 'discid' or press Return for next task. [] "
+    read discid
+    case $discid in
+        e|eject)
+            eject $cdrom
+            echo -n "Press return when new CD is in reader. [] "
+            read discid
+            ;;
+    esac
 done
