@@ -81,6 +81,7 @@ do
     fi
 
     if [ -r /mm/samling/meta/$genre/$discid/cover.png -o \
+            -r /mm/samling/meta/$genre/$discid/cover-600dpi.png -o \
             -r /mm/samling/meta/$genre/$discid/cover.jpg ]
     then
         echo
