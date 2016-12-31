@@ -243,19 +243,46 @@ if ($include_disc_artist &&
 my $is_classical = $d_genre eq "classical" || $d_id3genre eq "Classical";
 $pri = -99 if $is_classical;
 
-for $a (split(/;\s*/, $tr_artist)) {
-    next if $a eq "";
-    $artists{$a} ||= $pri++;
-}
 
-if ($tr_artist =~ /\(?feat\. (.*?)\)?/) {
+# track artist:
+#  - Foo (feat. Bar)
+#  - Foo - (feat. Bar)
+#  - Foo feat. Bar
+#  - Foo featuring Bar
+#  - Foo featuring Bar & Tar
+if ($tr_artist =~ s/(?: - )?\s*\(?feat(?:\.|uring) ([^)]+)(\)|$)//i) {
+    $artists{$tr_artist} ||= $pri++;
     my $featuring = $1;
     for $a (split(/\s*(?:\&|,)\s*/, $featuring)) {
 	$artists{$a} ||= $pri++;
     }
+} else {
+    # A plain semicolon delimited list
+    for $a (split(/;\s*/, $tr_artist)) {
+        next if $a eq "";
+        $artists{$a} ||= $pri++;
+    }
 }
 
+# track name - here () are mandatory
+#  - Umbrella (Feat. Jay Z)
+if ($tr_name =~ s/\s*\(feat(?:\.|uring) (.+?)\)//i) {
+    my $featuring = $1;
+    for $a (split(/\s*(?:\&|,)\s*/, $featuring)) {
+	$artists{$a} ||= $pri++;
+    }
+#  - Umbrella (Rihanna Feat. Jay Z)
+} elsif ($tr_name =~ s/\s*\(([^)]+) feat(?:\.|uring) (.+?)\)//i) {
+    my $featuring = "$1, $2";
+    for $a (split(/\s*(?:\&|,)\s*/, $featuring)) {
+	$artists{$a} ||= $pri++;
+    }
+}
 my @artists = sort { $artists{$a} <=> $artists{$b} } keys(%artists);
+if (@artists > 1) {
+    print ".. tagging '$tr_name' to \n";
+    print "   [\"", join('"; "', @artists), "\"]\n";
+}
 my $d_year = $d_date;
 $d_year = $1 if $d_date =~ /^(\d+)-/;
 
